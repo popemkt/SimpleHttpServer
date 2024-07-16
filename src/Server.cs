@@ -162,7 +162,7 @@ Response HandlePostFileRequest(Request request)
     var fileName = request.Path.Substring(7);
     var filePath = Path.Combine(directory, fileName);
     File.WriteAllText(filePath, request.Body);
-    return new Response { StatusCode = 404, Protocol = request.Protocol };
+    return new Response { StatusCode = 201, Protocol = request.Protocol };
 }
 
 
