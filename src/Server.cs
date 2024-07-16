@@ -134,6 +134,7 @@ Response ExtractHandleResponseString(Request request)
 {
     return request.Path switch
     {
+        null => new Response { StatusCode = 200, Protocol = request.Protocol },
         "/" => new Response { StatusCode = 200, Protocol = request.Protocol },
         _ when request.Path.StartsWith("/echo/") => new Response
         {
