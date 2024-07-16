@@ -21,15 +21,10 @@ socket.Close();
 Request ExtractHandleRequestString(string decodedString)
 {
     var parsedRequest = new Request();
-    string[] lines = decodedString.Split("\r\n");
-    foreach (string line in lines)
-    {
-        if (line.StartsWith("GET /"))
-        {
-            parsedRequest.Path = line.Substring(4);
-            parsedRequest.Method = Method.GET;
-        }
-    }
+    var lines = decodedString.Split("\r\n");
+    var parts = lines[0].Split(' ');
+    parsedRequest.Path = parts[1];
+    parsedRequest.Method = Enum.Parse<Method>(parts[0]);
 
     return parsedRequest;
 }
@@ -63,13 +58,13 @@ public class Response
 
     public override string ToString()
     {
-        return $"{Method} {StatusCode} {StatusCodes.Description[StatusCode]} {ContentType}\r\n\r\n{Body}";
+        return $"{Method} {StatusCode} {StatusCodes.Description[StatusCode]}\r\n\r\n{Body}";
     }
 }
 
 public static class StatusCodes
 {
-    public static Dictionary<int, string> Description = new()
+    public static readonly Dictionary<int, string> Description = new()
     {
         { 200, "OK" },
         { 404, "Not Found" },
