@@ -124,30 +124,49 @@ Request ParseRequest(ReadOnlySpan<byte> buffer)
 
 Response HandleRequest(Request request)
 {
-    return request.Path switch
+    return request.Method switch
     {
-        null => new Response { StatusCode = 200, Protocol = request.Protocol },
-        "/" => new Response { StatusCode = 200, Protocol = request.Protocol },
-        _ when request.Path.StartsWith("/echo/") => new Response
-        {
-            StatusCode = 200,
-            Protocol = request.Protocol,
-            Body = request.Path.Substring(6),
-            ContentType = "text/plain"
-        },
-        _ when request.Path.StartsWith("/files/") => HandleFileRequest(request),
-        _ when request.Headers.ContainsKey("User-Agent") => new Response
-        {
-            StatusCode = 200,
-            Protocol = request.Protocol,
-            Body = request.Headers["User-Agent"],
-            ContentType = "text/plain"
-        },
-        _ => new Response { StatusCode = 404, Protocol = request.Protocol },
+        Method.GET =>
+            request.Path switch
+            {
+                null => new Response { StatusCode = 200, Protocol = request.Protocol },
+                "/" => new Response { StatusCode = 200, Protocol = request.Protocol },
+                _ when request.Path.StartsWith("/echo/") => new Response
+                {
+                    StatusCode = 200,
+                    Protocol = request.Protocol,
+                    Body = request.Path.Substring(6),
+                    ContentType = "text/plain"
+                },
+                _ when request.Path.StartsWith("/files/") => HandleGetFileRequest(request),
+                _ when request.Headers.ContainsKey("User-Agent") => new Response
+                {
+                    StatusCode = 200,
+                    Protocol = request.Protocol,
+                    Body = request.Headers["User-Agent"],
+                    ContentType = "text/plain"
+                },
+                _ => new Response { StatusCode = 404, Protocol = request.Protocol },
+            },
+        Method.POST =>
+            request.Path switch
+            {
+                _ when request.Path.StartsWith("/files/") => HandlePostFileRequest(request),
+                _ => new Response { StatusCode = 404, Protocol = request.Protocol },
+            }
     };
 }
 
-Response HandleFileRequest(Request request)
+Response HandlePostFileRequest(Request request)
+{
+    var fileName = request.Path.Substring(7);
+    var filePath = Path.Combine(directory, fileName);
+    File.WriteAllText(filePath, request.Body);
+    return new Response { StatusCode = 404, Protocol = request.Protocol };
+}
+
+
+Response HandleGetFileRequest(Request request)
 {
     var fileName = request.Path.Substring(7);
     var filePath = Path.Combine(directory, fileName);
@@ -186,6 +205,7 @@ public class Request
 public enum Method
 {
     GET,
+    POST,
 }
 
 public class Response
@@ -222,6 +242,7 @@ public static class StatusCodes
     public static readonly Dictionary<int, string> Description = new()
     {
         { 200, "OK" },
+        { 201, "Created" },
         { 404, "Not Found" },
         { 500, "Internal Server Error" }
     };
