@@ -34,8 +34,15 @@ Response ExtractHandleResponseString(Request request)
 {
     return request.Path switch
     {
-        "/" => new Response { StatusCode = 200 , Protocol = request.Protocol},
-        _ => new Response { StatusCode = 404, Protocol = request.Protocol},
+        "/" => new Response { StatusCode = 200, Protocol = request.Protocol },
+        _ when request.Path.StartsWith("/echo/") => new Response 
+        { 
+            StatusCode = 200, 
+            Protocol = request.Protocol, 
+            Body = request.Path.Substring(6),
+            ContentType = "text/plain"
+        },
+        _ => new Response { StatusCode = 404, Protocol = request.Protocol },
     };
 }
 
@@ -57,11 +64,21 @@ public class Response
     public int StatusCode { get; set; }
     public string Protocol { get; set; }
     public string ContentType { get; set; }
-    public Method Method { get; set; }
+
+    private string GetContentHeaders()
+    {
+        var builder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(ContentType))
+            builder.Append($"Content-Type: {ContentType}\r\n");
+        if (!string.IsNullOrEmpty(Body))
+            builder.AppendLine($"Content-Length: {Body.Length}\r\n");
+        return builder.ToString();
+    }
 
     public override string ToString()
     {
-        return $"{Protocol} {StatusCode} {StatusCodes.Description[StatusCode]}\r\n\r\n{Body}";
+        var headers = GetContentHeaders();
+        return $"{Protocol} {StatusCode} {StatusCodes.Description[StatusCode]}\r\n{headers}\r\n{Body}";
     }
 }
 
