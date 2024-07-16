@@ -71,7 +71,7 @@ public class Response
         if (!string.IsNullOrWhiteSpace(ContentType))
             builder.Append($"Content-Type: {ContentType}\r\n");
         if (!string.IsNullOrEmpty(Body))
-            builder.AppendLine($"Content-Length: {Body.Length}\r\n");
+            builder.Append($"Content-Length: {Body.Length}\r\n");
         return builder.ToString();
     }
 
