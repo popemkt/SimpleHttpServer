@@ -9,13 +9,16 @@ Console.WriteLine("Logs from your program will appear here!");
 // Uncomment this block to pass the first stage
 TcpListener server = new TcpListener(IPAddress.Any, 4221);
 server.Start();
-var socket = await server.AcceptSocketAsync(); // wait for client
-var buffer = new byte[1024];
-var bytesReceived = await socket.ReceiveAsync(buffer, SocketFlags.None);
-var request = ExtractHandleRequestString(buffer.AsSpan(0, bytesReceived));
-var response = ExtractHandleResponseString(request);
-await socket.SendAsync(Encoding.Default.GetBytes(response.ToString()));
-socket.Close();
+while (true)
+{
+    var socket = await server.AcceptSocketAsync(); // wait for client
+    var buffer = new byte[1024];
+    var bytesReceived = await socket.ReceiveAsync(buffer, SocketFlags.None);
+    var request = ExtractHandleRequestString(buffer.AsSpan(0, bytesReceived));
+    var response = ExtractHandleResponseString(request);
+    await socket.SendAsync(Encoding.Default.GetBytes(response.ToString()));
+    socket.Close();
+}
 
 Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
 {
@@ -42,6 +45,7 @@ Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
                 {
                     currentLine.Add(b);
                 }
+
                 break;
 
             case ParsingState.Path:
@@ -55,6 +59,7 @@ Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
                 {
                     currentLine.Add(b);
                 }
+
                 break;
 
             case ParsingState.Protocol:
@@ -68,6 +73,7 @@ Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
                 {
                     currentLine.Add(b);
                 }
+
                 break;
 
             case ParsingState.HeaderName:
@@ -85,6 +91,7 @@ Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
                 {
                     currentLine.Add(b);
                 }
+
                 break;
 
             case ParsingState.HeaderValue:
@@ -99,6 +106,7 @@ Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
                 {
                     currentLine.Add(b);
                 }
+
                 break;
 
             case ParsingState.Body:
@@ -128,10 +136,10 @@ Response ExtractHandleResponseString(Request request)
     return request.Path switch
     {
         "/" => new Response { StatusCode = 200, Protocol = request.Protocol },
-        _ when request.Path.StartsWith("/echo/") => new Response 
-        { 
-            StatusCode = 200, 
-            Protocol = request.Protocol, 
+        _ when request.Path.StartsWith("/echo/") => new Response
+        {
+            StatusCode = 200,
+            Protocol = request.Protocol,
             Body = request.Path.Substring(6),
             ContentType = "text/plain"
         },
