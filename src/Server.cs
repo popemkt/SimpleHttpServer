@@ -19,12 +19,12 @@ async Task HandleSocket(Socket socket)
 {
     var buffer = new byte[1024];
     var bytesReceived = await socket.ReceiveAsync(buffer, SocketFlags.None);
-    var request = ExtractHandleRequestString(buffer.AsSpan(0, bytesReceived));
-    var response = ExtractHandleResponseString(request);
+    var request = ParseRequest(buffer.AsSpan(0, bytesReceived));
+    var response = HandleRequest(request);
     await socket.SendAsync(Encoding.Default.GetBytes(response.ToString()));
 }
 
-Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
+Request ParseRequest(ReadOnlySpan<byte> buffer)
 {
     var parsedRequest = new Request();
     var state = ParsingState.Method;
@@ -123,19 +123,7 @@ Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
     return parsedRequest;
 }
 
-// Request ExtractHandleRequestString(string decodedString)
-// {
-//     var parsedRequest = new Request();
-//     var lines = decodedString.Split("\r\n");
-//     var parts = lines[0].Split(' ');
-//     parsedRequest.Path = parts[1];
-//     parsedRequest.Method = Enum.Parse<Method>(parts[0]);
-//     parsedRequest.Protocol = parts[2];
-//
-//     return parsedRequest;
-// }
-
-Response ExtractHandleResponseString(Request request)
+Response HandleRequest(Request request)
 {
     return request.Path switch
     {
@@ -148,6 +136,7 @@ Response ExtractHandleResponseString(Request request)
             Body = request.Path.Substring(6),
             ContentType = "text/plain"
         },
+        _ when request.Path.StartsWith("/files/") => HandleFileRequest(request),
         _ when request.Headers.ContainsKey("User-Agent") => new Response
         {
             StatusCode = 200,
@@ -156,6 +145,23 @@ Response ExtractHandleResponseString(Request request)
             ContentType = "text/plain"
         },
         _ => new Response { StatusCode = 404, Protocol = request.Protocol },
+    };
+
+}
+
+Response HandleFileRequest(Request request)
+{
+    var path = request.Path.Substring(7);
+    return File.Exists(path) switch
+    {
+        true => new Response
+        {
+            StatusCode = 200,
+            Protocol = request.Protocol,
+            Body = File.ReadAllText(path),
+            ContentType = "application/octet-stream"
+        },
+        false => new Response { StatusCode = 404, Protocol = request.Protocol },
     };
 }
 
@@ -195,8 +201,13 @@ public class Response
         var builder = new StringBuilder();
         if (!string.IsNullOrWhiteSpace(ContentType))
             builder.Append($"Content-Type: {ContentType}\r\n");
+        
         if (!string.IsNullOrEmpty(Body))
-            builder.Append($"Content-Length: {Body.Length}\r\n");
+        {
+            var length = ContentType == "application/octet-stream" ? Encoding.UTF8.GetByteCount(Body) : Body.Length;
+            builder.Append($"Content-Length: {length}\r\n");
+        }
+        
         return builder.ToString();
     }
 
