@@ -11,24 +11,117 @@ TcpListener server = new TcpListener(IPAddress.Any, 4221);
 server.Start();
 var socket = await server.AcceptSocketAsync(); // wait for client
 var buffer = new byte[1024];
-var _ = socket.ReceiveAsync(buffer);
-var decodedString = Encoding.Default.GetString(buffer);
-var request = ExtractHandleRequestString(decodedString);
+var bytesReceived = await socket.ReceiveAsync(buffer, SocketFlags.None);
+var request = ExtractHandleRequestString(buffer.AsSpan(0, bytesReceived));
 var response = ExtractHandleResponseString(request);
 await socket.SendAsync(Encoding.Default.GetBytes(response.ToString()));
 socket.Close();
 
-Request ExtractHandleRequestString(string decodedString)
+Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
 {
     var parsedRequest = new Request();
-    var lines = decodedString.Split("\r\n");
-    var parts = lines[0].Split(' ');
-    parsedRequest.Path = parts[1];
-    parsedRequest.Method = Enum.Parse<Method>(parts[0]);
-    parsedRequest.Protocol = parts[2];
+    var state = ParsingState.Method;
+    var headerName = "";
+    var headerValue = "";
+    var bodyBuilder = new List<byte>();
+    var currentLine = new List<byte>();
 
+    foreach (var b in buffer)
+    {
+        char c = (char)b;
+        switch (state)
+        {
+            case ParsingState.Method:
+                if (c == ' ')
+                {
+                    parsedRequest.Method = Enum.Parse<Method>(Encoding.ASCII.GetString(currentLine.ToArray()));
+                    currentLine.Clear();
+                    state = ParsingState.Path;
+                }
+                else
+                {
+                    currentLine.Add(b);
+                }
+                break;
+
+            case ParsingState.Path:
+                if (c == ' ')
+                {
+                    parsedRequest.Path = Encoding.ASCII.GetString(currentLine.ToArray());
+                    currentLine.Clear();
+                    state = ParsingState.Protocol;
+                }
+                else
+                {
+                    currentLine.Add(b);
+                }
+                break;
+
+            case ParsingState.Protocol:
+                if (c == '\r')
+                {
+                    parsedRequest.Protocol = Encoding.ASCII.GetString(currentLine.ToArray());
+                    currentLine.Clear();
+                    state = ParsingState.HeaderName;
+                }
+                else
+                {
+                    currentLine.Add(b);
+                }
+                break;
+
+            case ParsingState.HeaderName:
+                if (c == ':')
+                {
+                    headerName = Encoding.ASCII.GetString(currentLine.ToArray()).Trim();
+                    currentLine.Clear();
+                    state = ParsingState.HeaderValue;
+                }
+                else if (c == '\r')
+                {
+                    state = ParsingState.Body;
+                }
+                else
+                {
+                    currentLine.Add(b);
+                }
+                break;
+
+            case ParsingState.HeaderValue:
+                if (c == '\r')
+                {
+                    headerValue = Encoding.ASCII.GetString(currentLine.ToArray()).Trim();
+                    parsedRequest.Headers[headerName] = headerValue;
+                    currentLine.Clear();
+                    state = ParsingState.HeaderName;
+                }
+                else
+                {
+                    currentLine.Add(b);
+                }
+                break;
+
+            case ParsingState.Body:
+                bodyBuilder.Add(b);
+                break;
+        }
+    }
+
+    parsedRequest.Body = Encoding.ASCII.GetString(bodyBuilder.ToArray()).TrimStart('\n');
     return parsedRequest;
 }
+
+// Request ExtractHandleRequestString(string decodedString)
+// {
+//     var parsedRequest = new Request();
+//     var lines = decodedString.Split("\r\n");
+//     var parts = lines[0].Split(' ');
+//     parsedRequest.Path = parts[1];
+//     parsedRequest.Method = Enum.Parse<Method>(parts[0]);
+//     parsedRequest.Protocol = parts[2];
+//
+//     return parsedRequest;
+// }
 
 Response ExtractHandleResponseString(Request request)
 {
@@ -42,8 +135,25 @@ Response ExtractHandleResponseString(Request request)
             Body = request.Path.Substring(6),
             ContentType = "text/plain"
         },
+        _ when request.Headers.ContainsKey("User-Agent") => new Response
+        {
+            StatusCode = 200,
+            Protocol = request.Protocol,
+            Body = request.Headers["User-Agent"],
+            ContentType = "text/plain"
+        },
         _ => new Response { StatusCode = 404, Protocol = request.Protocol },
     };
+}
+
+public enum ParsingState
+{
+    Method,
+    Path,
+    Protocol,
+    HeaderName,
+    HeaderValue,
+    Body
 }
 
 public class Request
@@ -51,6 +161,8 @@ public class Request
     public string Path { get; set; }
     public Method Method { get; set; }
     public string Protocol { get; set; }
+    public Dictionary<string, string> Headers { get; set; } = new();
+    public string Body { get; set; }
 }
 
 public enum Method
