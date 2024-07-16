@@ -11,7 +11,12 @@ TcpListener server = new TcpListener(IPAddress.Any, 4221);
 server.Start();
 while (true)
 {
-    var socket = await server.AcceptSocketAsync(); // wait for client
+    var newSocket = await server.AcceptSocketAsync(); // wait for client
+    _ = HandleSocket(newSocket);
+}
+
+async Task HandleSocket(Socket socket)
+{
     var buffer = new byte[1024];
     var bytesReceived = await socket.ReceiveAsync(buffer, SocketFlags.None);
     var request = ExtractHandleRequestString(buffer.AsSpan(0, bytesReceived));
