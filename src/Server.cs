@@ -20,6 +20,7 @@ async Task HandleSocket(Socket socket)
     var request = ParseRequest(buffer.AsSpan(0, bytesReceived));
     var response = HandleRequest(request);
     await socket.SendAsync(Encoding.Default.GetBytes(response.ToString()));
+    socket.Close();
 }
 
 Request ParseRequest(ReadOnlySpan<byte> buffer)
