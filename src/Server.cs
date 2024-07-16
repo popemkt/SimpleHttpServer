@@ -17,7 +17,6 @@ while (true)
     var request = ExtractHandleRequestString(buffer.AsSpan(0, bytesReceived));
     var response = ExtractHandleResponseString(request);
     await socket.SendAsync(Encoding.Default.GetBytes(response.ToString()));
-    socket.Close();
 }
 
 Request ExtractHandleRequestString(ReadOnlySpan<byte> buffer)
