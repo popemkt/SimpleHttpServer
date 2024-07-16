@@ -25,6 +25,7 @@ Request ExtractHandleRequestString(string decodedString)
     var parts = lines[0].Split(' ');
     parsedRequest.Path = parts[1];
     parsedRequest.Method = Enum.Parse<Method>(parts[0]);
+    parsedRequest.Protocol = parts[2];
 
     return parsedRequest;
 }
@@ -33,8 +34,8 @@ Response ExtractHandleResponseString(Request request)
 {
     return request.Path switch
     {
-        "/" => new Response { StatusCode = 200 },
-        _ => new Response { StatusCode = 404, Body = "" }
+        "/" => new Response { StatusCode = 200 , Protocol = request.Protocol},
+        _ => new Response { StatusCode = 404, Protocol = request.Protocol},
     };
 }
 
@@ -42,6 +43,7 @@ public class Request
 {
     public string Path { get; set; }
     public Method Method { get; set; }
+    public string Protocol { get; set; }
 }
 
 public enum Method
@@ -53,12 +55,13 @@ public class Response
 {
     public string Body { get; set; }
     public int StatusCode { get; set; }
+    public string Protocol { get; set; }
     public string ContentType { get; set; }
     public Method Method { get; set; }
 
     public override string ToString()
     {
-        return $"{Method} {StatusCode} {StatusCodes.Description[StatusCode]}\r\n\r\n{Body}";
+        return $"{Protocol} {StatusCode} {StatusCodes.Description[StatusCode]}\r\n\r\n{Body}";
     }
 }
 
