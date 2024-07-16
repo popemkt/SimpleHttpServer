@@ -145,19 +145,19 @@ Response HandleRequest(Request request)
         },
         _ => new Response { StatusCode = 404, Protocol = request.Protocol },
     };
-
 }
 
 Response HandleFileRequest(Request request)
 {
-    var path = request.Path.Substring(7);
-    return File.Exists(Path.Combine(directory, path)) switch
+    var fileName = request.Path.Substring(7);
+    var filePath = Path.Combine(directory, fileName);
+    return File.Exists(filePath) switch
     {
         true => new Response
         {
             StatusCode = 200,
             Protocol = request.Protocol,
-            Body = File.ReadAllText(path),
+            Body = File.ReadAllText(filePath),
             ContentType = "application/octet-stream"
         },
         false => new Response { StatusCode = 404, Protocol = request.Protocol },
@@ -200,13 +200,13 @@ public class Response
         var builder = new StringBuilder();
         if (!string.IsNullOrWhiteSpace(ContentType))
             builder.Append($"Content-Type: {ContentType}\r\n");
-        
+
         if (!string.IsNullOrEmpty(Body))
         {
             var length = ContentType == "application/octet-stream" ? Encoding.UTF8.GetByteCount(Body) : Body.Length;
             builder.Append($"Content-Length: {length}\r\n");
         }
-        
+
         return builder.ToString();
     }
 
