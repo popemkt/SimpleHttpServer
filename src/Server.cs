@@ -134,12 +134,12 @@ Response HandleRequest(Request request)
                 "/" => new Response { StatusCode = 200, Protocol = request.Protocol },
                 _ when request.Path.StartsWith("/echo/") => HandleGetEchoRequest(request),
                 _ when request.Path.StartsWith("/files/") => HandleGetFileRequest(request),
-                _ when request.Headers.ContainsKey(Headers.UserAgent) => new Response
+                _ when request.Headers.ContainsKey(Header.UserAgent) => new Response
                 {
                     StatusCode = 200,
                     Protocol = request.Protocol,
                     Body = request.Headers["User-Agent"],
-                }.SetHeader(Headers.ContentType, "text/plain"),
+                }.SetHeader(Header.ContentType, "text/plain"),
                 _ => new Response { StatusCode = 404, Protocol = request.Protocol },
             },
         Method.POST =>
@@ -163,30 +163,26 @@ Response HandleGetEchoRequest(Request request)
         StatusCode = 200,
         Protocol = request.Protocol,
         Body = request.Path.Substring(6),
-    }.SetHeader(Headers.ContentType, "text/plain");
+    }.SetHeader(Header.ContentType, "text/plain");
 
-    if (request.Headers.TryGetValue(Headers.AcceptEncoding, out string? value) &&
+    if (request.Headers.TryGetValue(Header.AcceptEncoding, out string? value) &&
         value.Split(',', StringSplitOptions.TrimEntries).Contains("gzip"))
     {
-        response.SetHeader(Headers.ContentEncoding, "gzip");
-        response.RawBody = Gzip(Encoding.Default.GetBytes(response.Body));
+        response.SetHeader(Header.ContentEncoding, "gzip");
+        response.RawBody = Gzip(response.Body);
     }
 
     return response;
 }
 
-byte[] Gzip(byte[] input)
+byte[] Gzip(string input)
 {
+    using var inputBytes = new MemoryStream(Encoding.UTF8.GetBytes(input));
     using var result = new MemoryStream();
-
-    var lengthBytes = BitConverter.GetBytes(input.Length);
-    result.Write(lengthBytes, 0, 4);
-
     using (var compressionStream = new GZipStream(result,
                CompressionMode.Compress))
     {
-        compressionStream.Write(input, 0, input.Length);
-        compressionStream.Flush();
+        inputBytes.CopyTo(compressionStream);
     }
 
     return result.ToArray();
@@ -212,7 +208,7 @@ Response HandleGetFileRequest(Request request)
             StatusCode = 200,
             Protocol = request.Protocol,
             Body = File.ReadAllText(filePath),
-        }.SetHeader(Headers.ContentType, "application/octet-stream"),
+        }.SetHeader(Header.ContentType, "application/octet-stream"),
         false => new Response { StatusCode = 404, Protocol = request.Protocol },
     };
 }
@@ -245,20 +241,16 @@ public enum Method
 public class Response
 {
     private byte[]? _rawBody;
-    public string Body { get; set; }
-
     public byte[]? RawBody
     {
         get => IsBodyRaw ? _rawBody : Encoding.Default.GetBytes(Body);
         set => _rawBody = value;
     }
-
+    public string Body { get; set; }
     public int StatusCode { get; set; }
     public string Protocol { get; set; }
     private bool IsBodyRaw => _rawBody is { Length: > 0 };
-
     public Dictionary<string, string> Headers { get; set; } = new();
-
     public Response SetHeader(string header, string value)
     {
         Headers[header] = value;
@@ -273,21 +265,26 @@ public class Response
     private string GetContentHeaders()
     {
         var builder = new StringBuilder();
+
+        if (!string.IsNullOrEmpty(Body) || IsBodyRaw)
+        {
+            Headers.TryGetValue(Header.ContentType, out var contentType);
+            var length = contentType switch
+            {
+                _ when Headers.TryGetValue(Header.ContentEncoding, out var contentEncoding) && contentEncoding == "gzip" => RawBody?.Length ?? 0,
+                null => Body.Length,
+                "application/octet-stream" => Encoding.UTF8.GetBytes(Body).Length,
+                _ => throw new ArgumentOutOfRangeException(),
+            };
+        
+            Headers[Header.ContentLength] = length.ToString();
+        }
+
         foreach (var header in Headers)
         {
             builder.Append($"{header.Key}: {header.Value}\r\n");
         }
-
-        if (string.IsNullOrEmpty(Body)) return builder.ToString();
         
-        
-        var length = Headers.TryGetValue("Content-Type", out var contentType) &&
-                     contentType == "application/octet-stream"
-            ? RawBody?.Length ?? 0
-            : Body.Length;
-        
-        builder.Append($"Content-Length: {length}\r\n");
-
         return builder.ToString();
     }
 
@@ -306,7 +303,7 @@ public class Response
     {
         var noBody = encoding.GetBytes(ToStringNoBody());
         return IsBodyRaw 
-            ? noBody.Concat(RawBody).ToArray() 
+            ? noBody.Concat(RawBody!).ToArray() 
             : noBody.Concat(encoding.GetBytes(Body)).ToArray();
     }
 }
@@ -322,7 +319,7 @@ public static class StatusCodes
     };
 }
 
-public static class Headers
+public static class Header
 {
     public const string ContentType = "Content-Type";
     public const string ContentEncoding = "Content-Encoding";
