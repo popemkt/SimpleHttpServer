@@ -246,7 +246,7 @@ public class Response
         get => IsBodyRaw ? _rawBody : Encoding.Default.GetBytes(Body);
         set => _rawBody = value;
     }
-    public string Body { get; set; }
+    public string? Body { get; set; }
     public int StatusCode { get; set; }
     public string Protocol { get; set; }
     private bool IsBodyRaw => _rawBody is { Length: > 0 };
@@ -301,9 +301,12 @@ public class Response
     public byte[] ToBytes(Encoding encoding)
     {
         var noBody = encoding.GetBytes(ToStringNoBody());
-        return IsBodyRaw 
-            ? noBody.Concat(RawBody!).ToArray() 
-            : noBody.Concat(encoding.GetBytes(Body)).ToArray();
+        return IsBodyRaw switch
+        {
+            true => noBody.Concat(RawBody!).ToArray(),
+            false when Body is null => noBody,
+            false when Body is not null => noBody.Concat(encoding.GetBytes(Body)).ToArray(),
+        };
     }
 }
 
