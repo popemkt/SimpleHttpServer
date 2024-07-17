@@ -124,7 +124,7 @@ Request ParseRequest(ReadOnlySpan<byte> buffer)
 
 Response HandleRequest(Request request)
 {
-    return request.Method switch
+    var response = request.Method switch
     {
         Method.GET =>
             request.Path switch
@@ -153,8 +153,15 @@ Response HandleRequest(Request request)
             {
                 _ when request.Path.StartsWith("/files/") => HandlePostFileRequest(request),
                 _ => new Response { StatusCode = 404, Protocol = request.Protocol },
-            }
+            },
+        _ => throw new ArgumentOutOfRangeException()
     };
+    if (request.Headers.ContainsKey("Accept-Encoding") && request.Headers["Accept-Encoding"].Contains("gzip"))
+        response.ContentEncoding = "gzip";
+    
+    //TODO can create context(with request + response) to pass around, for dealing with special cases like gzip above
+    
+    return response;
 }
 
 Response HandlePostFileRequest(Request request)
@@ -213,7 +220,9 @@ public class Response
     public string Body { get; set; }
     public int StatusCode { get; set; }
     public string Protocol { get; set; }
+    //Header section, can be refactored
     public string ContentType { get; set; }
+    public string ContentEncoding { get; set; }
 
     private string GetContentHeaders()
     {
@@ -226,7 +235,10 @@ public class Response
             var length = ContentType == "application/octet-stream" ? Encoding.UTF8.GetByteCount(Body) : Body.Length;
             builder.Append($"Content-Length: {length}\r\n");
         }
-
+        
+        if (!ContentEncoding.Equals("gzip"))
+            builder.Append($"Content-Encoding: {ContentEncoding}\r\n");
+        
         return builder.ToString();
     }
 
