@@ -272,9 +272,8 @@ public class Response
             var length = contentType switch
             {
                 _ when Headers.TryGetValue(Header.ContentEncoding, out var contentEncoding) && contentEncoding == "gzip" => RawBody?.Length ?? 0,
-                null => Body.Length,
                 "application/octet-stream" => Encoding.UTF8.GetBytes(Body).Length,
-                _ => throw new ArgumentOutOfRangeException(),
+                _ => Body.Length,
             };
         
             Headers[Header.ContentLength] = length.ToString();
