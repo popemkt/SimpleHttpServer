@@ -154,7 +154,7 @@ Response HandleRequest(Request request)
             },
         _ => throw new ArgumentOutOfRangeException()
     };
-    if (request.Headers.ContainsKey(Headers.AcceptEncoding) && request.Headers[Headers.AcceptEncoding].Contains("gzip"))
+    if (request.Headers.ContainsKey(Headers.AcceptEncoding) && request.Headers[Headers.AcceptEncoding].Split(',', StringSplitOptions.TrimEntries).Contains("gzip"))
         response.SetHeader(Headers.ContentEncoding, "gzip");
 
     //TODO can create context(with request + response) to pass around, for dealing with special cases like gzip above
