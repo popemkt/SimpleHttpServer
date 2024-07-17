@@ -136,16 +136,14 @@ Response HandleRequest(Request request)
                     StatusCode = 200,
                     Protocol = request.Protocol,
                     Body = request.Path.Substring(6),
-                    ContentType = "text/plain"
-                },
+                }.SetHeader(Headers.ContentType, "text/plain"),
                 _ when request.Path.StartsWith("/files/") => HandleGetFileRequest(request),
-                _ when request.Headers.ContainsKey("User-Agent") => new Response
+                _ when request.Headers.ContainsKey(Headers.UserAgent) => new Response
                 {
                     StatusCode = 200,
                     Protocol = request.Protocol,
                     Body = request.Headers["User-Agent"],
-                    ContentType = "text/plain"
-                },
+                }.SetHeader(Headers.ContentType, "text/plain"),
                 _ => new Response { StatusCode = 404, Protocol = request.Protocol },
             },
         Method.POST =>
@@ -156,11 +154,11 @@ Response HandleRequest(Request request)
             },
         _ => throw new ArgumentOutOfRangeException()
     };
-    if (request.Headers.ContainsKey("Accept-Encoding") && request.Headers["Accept-Encoding"].Contains("gzip"))
-        response.ContentEncoding = "gzip";
-    
+    if (request.Headers.ContainsKey(Headers.AcceptEncoding) && request.Headers[Headers.AcceptEncoding].Contains("gzip"))
+        response.SetHeader(Headers.ContentEncoding, "gzip");
+
     //TODO can create context(with request + response) to pass around, for dealing with special cases like gzip above
-    
+
     return response;
 }
 
@@ -184,8 +182,7 @@ Response HandleGetFileRequest(Request request)
             StatusCode = 200,
             Protocol = request.Protocol,
             Body = File.ReadAllText(filePath),
-            ContentType = "application/octet-stream"
-        },
+        }.SetHeader(Headers.ContentType, "application/octet-stream"),
         false => new Response { StatusCode = 404, Protocol = request.Protocol },
     };
 }
@@ -205,7 +202,7 @@ public class Request
     public string Path { get; set; }
     public Method Method { get; set; }
     public string Protocol { get; set; }
-    public Dictionary<string, string> Headers { get; set; } = new();
+    public Dictionary<string, string> Headers { get; } = new();
     public string Body { get; set; }
 }
 
@@ -220,25 +217,37 @@ public class Response
     public string Body { get; set; }
     public int StatusCode { get; set; }
     public string Protocol { get; set; }
-    //Header section, can be refactored
-    public string ContentType { get; set; }
-    public string ContentEncoding { get; set; }
+
+    public Dictionary<string, string> Headers { get; set; } = new();
+
+    public Response SetHeader(string header, string value)
+    {
+        Headers[header] = value;
+        return this;
+    }
+
+    public string GetHeader(string key)
+    {
+        return Headers.TryGetValue(key, out var value) ? value : null;
+    }
 
     private string GetContentHeaders()
     {
         var builder = new StringBuilder();
-        if (!string.IsNullOrWhiteSpace(ContentType))
-            builder.Append($"Content-Type: {ContentType}\r\n");
+        foreach (var header in Headers)
+        {
+            builder.Append($"{header.Key}: {header.Value}\r\n");
+        }
 
         if (!string.IsNullOrEmpty(Body))
         {
-            var length = ContentType == "application/octet-stream" ? Encoding.UTF8.GetByteCount(Body) : Body.Length;
+            var length = Headers.TryGetValue("Content-Type", out var contentType) &&
+                         contentType == "application/octet-stream"
+                ? Encoding.UTF8.GetByteCount(Body)
+                : Body.Length;
             builder.Append($"Content-Length: {length}\r\n");
         }
-        
-        if (!ContentEncoding.Equals("gzip"))
-            builder.Append($"Content-Encoding: {ContentEncoding}\r\n");
-        
+
         return builder.ToString();
     }
 
@@ -258,4 +267,13 @@ public static class StatusCodes
         { 404, "Not Found" },
         { 500, "Internal Server Error" }
     };
+}
+
+public static class Headers
+{
+    public const string ContentType = "Content-Type";
+    public const string ContentEncoding = "Content-Encoding";
+    public const string ContentLength = "Content-Length";
+    public const string AcceptEncoding = "Accept-Encoding";
+    public const string UserAgent = "User-Agent";
 }
